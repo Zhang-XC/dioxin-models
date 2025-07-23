@@ -1,11 +1,84 @@
-import argparse
+import os
+import json
 
 import numpy as np
 import pandas as pd
 
 
-# %% Initialize simulation parameters
-congeners = [
+def load_input_data(path: str) -> pd.DataFrame:
+    skip_rows = 0
+    with open(path, 'r') as file:
+        for line in file:
+            if line.strip().startswith('#'):
+                skip_rows += 1
+            else:
+                break
+
+    df = pd.read_csv(path, skiprows=skip_rows, index_col="congener")
+    return df.reindex(CONGENERS)
+
+
+def init_results() -> pd.DataFrame:
+    results = pd.DataFrame(index=CONGENERS, columns=["total"])
+    results.index.name = "congener"
+    return results
+
+
+def save_results(df: pd.DataFrame, filename: str) -> None:
+    df.to_csv(os.path.join(DATA_PATH, filename), index_label="congener", index=True)
+
+
+def save_initial_profile(df: pd.DataFrame) -> None:
+    results = init_results()
+    results["total"] = df["gas"] + df["particulate"]
+    save_results(results, "0.csv")
+
+
+def simulate_removal_with_partitioning(device_config: dict, device_index: int) -> pd.DataFrame:
+    init_profile = load_input_data(os.path.join(OUTPUT_PATH, f"{int(device_index - 1)}.csv"))
+    ref_profile = load_input_data(os.path.join(DATA_PATH, f"{int(device_index)}.csv"))
+    
+    vp_params = load_input_data(os.path.join("params", "vapor_pressure.csv"))
+    vapor_pressure = 10 ** (vp_params["b"] - vp_params["a"] / device_config["temperature"])
+    gas_fraction = 0.3491 + 0.0407 * np.log(vapor_pressure) # TODO
+    
+    profile_before_g = init_profile["total"] * gas_fraction
+    profile_before_p = init_profile["total"] * (1 - gas_fraction)
+
+    conc_before_g = profile_before_g * device_config["conc_in"]
+    conc_before_p = profile_before_p * device_config["conc_in"]
+
+    removal_efficiency_g = 1 - ref_profile["gas_after"] * device_config["conc_out"] / \
+        (ref_profile["gas_before"] * device_config["conc_in"])
+    removal_efficiency_p = 1 - ref_profile["particulate_after"] * device_config["conc_out"] / \
+        (ref_profile["particulate_before"] * device_config["conc_in"])
+
+    conc_after_g = (1 - removal_efficiency_g) * conc_before_g
+    conc_after_p = (1 - removal_efficiency_p) * conc_before_p
+
+    profile_after_g = conc_after_g / (conc_after_g + conc_after_p).sum()
+    profile_after_p = conc_after_p / (conc_after_g + conc_after_p).sum()
+
+    results = init_results()
+    results["total"] = profile_after_g + profile_after_p
+    save_results(results, f"{device_index}.csv")
+
+
+def simulate_removal_without_partitioning(device_config: dict, device_index: int) -> pd.DataFrame:
+    init_profile = load_input_data(os.path.join(OUTPUT_PATH, f"{int(device_index - 1)}.csv"))
+    ref_profile = load_input_data(os.path.join(DATA_PATH, f"{int(device_index)}.csv"))
+
+    removal_efficiency = 1 - ref_profile["total_after"] / ref_profile["total_before"]
+    removal_efficiency_adjusted = (1 - removal_efficiency.sum()) / removal_efficiency.sum() + \
+        removal_efficiency / removal_efficiency.sum()
+    
+    results = init_results()
+    results["total"] = init_profile["total"] * (1 - removal_efficiency_adjusted)
+    save_results(results, f"{device_index}.csv")
+
+
+# %% Initialize simulation settings
+CONGENERS = [
     "2,3,7,8-TCDD",
     "1,2,3,7,8-PeCDD",
     "1,2,3,4,7,8-HxCDD",
@@ -25,88 +98,25 @@ congeners = [
     "OCDF"
 ]
 
-result_columns = [
-    "Before ESP (G.)",
-    "Before ESP (P.)",
-    "Before ESP (Total)",
-    "Before ESP (G. abs)",
-    "Before ESP (P. abs)",
-    "Before ESP (Total abs)",
-    "After ESP (G.)",
-    "After ESP (P.)",
-    "After ESP (Total)",
-    "After ESP (G. abs)",
-    "After ESP (P. abs)",
-    "After ESP (Total abs)",
-    "Removal Efficiency (G.)",
-    "Removal Efficiency (P.)",
-    "Removal Efficiency (Total)",
-]
+DATA_PATH = os.path.join("data", "profile_model")
+OUTPUT_PATH = os.path.join("results", "profile_model")
 
-vp_params = pd.read_csv("./params/vapor_pressure.csv", index_col="Congener")
-vp_params = vp_params.reindex(congeners)
+if not os.path.exists(OUTPUT_PATH):
+    os.makedirs(OUTPUT_PATH)
 
-esp_adj_coeffs = pd.read_csv("./params/esp_adjust_coeffs.csv", index_col="Congener")
-esp_adj_coeffs = esp_adj_coeffs.reindex(congeners)
-esp_adj_coeffs = esp_adj_coeffs["Coeff"]
+with open("config.json", "r") as f:
+    config = json.load(f)
 
-results = pd.DataFrame({
-    col: [pd.NA] * len(congeners)
-    for col in result_columns
-})
-results.index = congeners
+# %% Load and save initial profile
+init_profile = load_input_data(os.path.join(DATA_PATH, "0.csv"))
+save_initial_profile(init_profile)
 
-# %% Input parameters
-parser = argparse.ArgumentParser()
-parser.add_argument("--input_file", "-i", default="./data/input_profile_model.csv", type=str,
-                    help="Path to CSV file of initial congener profile")
-parser.add_argument("--output_file", "-o", default="./data/output_profile_model.csv", type=str,
-                    help="Path to CSV file of results")
-parser.add_argument("--T_esp", "-t", default=290, type=float,
-                    help="ESP temperature [°C]")
-parser.add_argument("--V_in", "-vi", default=58.966, type=float,
-                    help="Inlet flow rate of PCDD/Fs [ng/Nm3]")
-parser.add_argument("--V_out", "-vo", default=134.08, type=float,
-                    help="Outlet flow rate of PCDD/Fs [ng/Nm3]")
-args = parser.parse_args()
-
-init_profile = pd.read_csv(args.input_file, skiprows=1, index_col="Congener")
-init_profile = init_profile.reindex(congeners)
-init_profile["Before ESP (Total)"] = init_profile["Before ESP (G.)"] + init_profile["Before ESP (P.)"]
-init_profile["After ESP (Total)"] = init_profile["After ESP (G.)"] + init_profile["After ESP (P.)"]
-
-T_esp = 273.15 + args.T_esp
-V_in = args.V_in
-V_out = args.V_out
-
-# %% Simulation for ESP
-vp = 10 ** (vp_params["b"] - vp_params["a"] / T_esp)
-g_frac = 0.3491 + 0.0407 * np.log(vp)
-results["Before ESP (G.)"] = init_profile["Before ESP (Total)"] * g_frac
-results["Before ESP (P.)"] = init_profile["Before ESP (Total)"] * (1 - g_frac)
-results["Before ESP (Total)"] = init_profile["Before ESP (Total)"]
-
-results["Before ESP (G. abs)"] = results["Before ESP (G.)"] * V_in
-results["Before ESP (P. abs)"] = results["Before ESP (P.)"] * V_in
-results["Before ESP (Total abs)"] = results["Before ESP (G. abs)"] + results["Before ESP (P. abs)"]
-
-results["Removal Efficiency (G.)"] = 1 - init_profile["After ESP (G.)"] * V_out / (init_profile["Before ESP (G.)"] * V_in)
-results["Removal Efficiency (P.)"] = 1 - init_profile["After ESP (P.)"] * V_out / (init_profile["Before ESP (P.)"] * V_in)
-results["Removal Efficiency (P.)"] = results["Removal Efficiency (P.)"] * esp_adj_coeffs
-
-results["After ESP (G. abs)"] = (1 - results["Removal Efficiency (G.)"]) * results["Before ESP (G. abs)"]
-results["After ESP (P. abs)"] = (1 - results["Removal Efficiency (P.)"]) * results["Before ESP (P. abs)"]
-results["After ESP (Total abs)"] = results["After ESP (G. abs)"] + results["After ESP (P. abs)"]
-
-results["Removal Efficiency (Total)"] = 1 - results["After ESP (Total abs)"] / results["Before ESP (Total abs)"]
-
-sum_abs_after_esp = results["After ESP (G. abs)"].sum() + results["After ESP (P. abs)"].sum()
-results["After ESP (G.)"] = results["After ESP (G. abs)"] / sum_abs_after_esp
-results["After ESP (P.)"] = results["After ESP (P. abs)"] / sum_abs_after_esp
-results["After ESP (Total)"] = results["After ESP (G.)"] + results["After ESP (P.)"]
-
-# %% Drop temporary columns
-results = results.drop(columns=[col for col in results.columns if "abs" in col])
-
-# %% Save results
-results.to_csv(args.output_file, index_label="Congener", index=True)
+# %% Run simulation for each device
+for i, device_config in enumerate(config["devices"]):
+    device_index = i + 1
+    if device_config["mode"] == 1:
+        results = simulate_removal_with_partitioning(device_config, device_index=device_index)
+    elif device_config["mode"] == 2:
+        results = simulate_removal_without_partitioning(device_config, device_index=device_index)
+    else:
+        raise ValueError(f"Invalid mode {device_config['mode']} for device {device_index}.")

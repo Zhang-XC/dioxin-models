@@ -1,0 +1,15 @@
+{
+    "devices": [
+        {
+            "name": "ESP",
+            "mode": 1,
+            "temperature": 290,
+            "conc_in": 58.966,
+            "conc_out": 134.08
+        },
+        {
+            "name": "WS",
+            "mode": 2
+        }
+    ]
+}
