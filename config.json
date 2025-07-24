@@ -4,6 +4,7 @@
             "name": "ESP",
             "mode": 1,
             "temperature": 563.15,
+            "ref_temperature": 507.15,
             "conc_in": 58.966,
             "conc_out": 134.08,
             "adjustment": {

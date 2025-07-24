@@ -4,6 +4,8 @@ import json
 import numpy as np
 import pandas as pd
 
+from scipy.stats import linregress
+
 
 def load_input_data(path: str) -> pd.DataFrame:
     skip_rows = 0
@@ -35,6 +37,11 @@ def save_initial_profile(df: pd.DataFrame) -> None:
     save_results(results, "0.csv")
 
 
+def linear_regression(x_fit: pd.Series, y_fit: pd.Series, x_pred: pd.Series) -> pd.Series:
+    slope, intercept, _, _, _ = linregress(x_fit, y_fit)
+    return slope * x_pred + intercept
+
+
 def apply_adjustment_factors(s: pd.Series, phase: str, device_config: dict) -> pd.Series:
     valid_phases = ["gas", "particulate", "total"]
     if "adjustment" in device_config:
@@ -56,7 +63,14 @@ def simulate_removal_with_partitioning(device_config: dict, device_index: int) -
     
     vp_params = load_input_data(os.path.join("params", "vapor_pressure.csv"))
     vapor_pressure = 10 ** (vp_params["b"] - vp_params["a"] / device_config["temperature"])
-    gas_fraction = 0.3491 + 0.0407 * np.log(vapor_pressure) # TODO
+    ref_vapor_pressure = 10 ** (vp_params["b"] - vp_params["a"] / device_config["ref_temperature"])
+    ref_gas_fraction = ref_profile["gas_before"] / (ref_profile["gas_before"] + ref_profile["particulate_before"])
+
+    gas_fraction = linear_regression(
+        x_fit=np.log(ref_vapor_pressure),
+        y_fit=ref_gas_fraction,
+        x_pred=np.log(vapor_pressure)
+    )
 
     profile_before_g = init_profile["total"] * gas_fraction
     profile_before_p = init_profile["total"] * (1 - gas_fraction)
