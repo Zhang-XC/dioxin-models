@@ -1,19 +1,21 @@
-"# Each column indicates the mass fraction of each congener (including gas and particulate phases) relative to total PCDD/Fs, before or after treatment.",,
-congener,total_before,total_after
-"2,3,7,8-TCDD",0.0013,0.0011
-"1,2,3,7,8-PeCDD",0.0096,0.0053
-"1,2,3,4,7,8-HxCDD",0.0116,0.0093
-"1,2,3,6,7,8-HxCDD",0.029,0.0248
-"1,2,3,7,8,9-HxCDD",0.0164,0.0148
-"1,2,3,4,6,7,8-HpCDD",0.1351,0.1688
-OCDD,0.2418,0.3042
-"2,3,7,8-TCDF",0.0117,0.0042
-"1,2,3,7,8-PeCDF",0.02,0.0101
-"2,3,4,7,8-PeCDF",0.0498,0.0233
-"1,2,3,4,7,8-HxCDF",0.0334,0.0223
-"1,2,3,6,7,8-HxCDF",0.0444,0.0292
-"1,2,3,7,8,9-HxCDF",0.0039,0.0038
-"2,3,4,6,7,8-HxCDF",0.0831,0.0527
-"1,2,3,4,6,7,8-HpCDF",0.1511,0.1406
-"1,2,3,4,7,8,9-HpCDF",0.0273,0.029
-OCDF,0.1305,0.1563
+"# Each column indicates the fractional removal efficiency of each congener,",
+"# calculated as (initial_fraction - final_fraction) / initial_fraction,",
+# where the values are the congener's fraction of total PCDD/Fs.,
+congener,removal_efficiency
+"2,3,7,8-TCDD",0.535513768
+"1,2,3,7,8-PeCDD",0.537000031
+"1,2,3,4,7,8-HxCDD",0.255923374
+"1,2,3,6,7,8-HxCDD",0.21050183
+"1,2,3,7,8,9-HxCDD",0.185634498
+"1,2,3,4,6,7,8-HpCDD",-0.274880743
+OCDD,-0.335946629
+"2,3,7,8-TCDF",0.69468638
+"1,2,3,7,8-PeCDF",0.596657897
+"2,3,4,7,8-PeCDF",0.560356914
+"1,2,3,4,7,8-HxCDF",0.380517877
+"1,2,3,6,7,8-HxCDF",0.367878903
+"1,2,3,7,8,9-HxCDF",0.141752471
+"2,3,4,6,7,8-HxCDF",0.158242863
+"1,2,3,4,6,7,8-HpCDF",-0.085213637
+"1,2,3,4,7,8,9-HpCDF",-0.301623288
+OCDF,-0.59772325

@@ -3,9 +3,13 @@
         {
             "name": "ESP",
             "mode": 1,
-            "temperature": 290,
+            "temperature": 563.15,
             "conc_in": 58.966,
-            "conc_out": 134.08
+            "conc_out": 134.08,
+            "adjustment": {
+                "phase": ["particulate"],
+                "factors_path": "./params/esp_adjust_factors.csv"
+            }
         },
         {
             "name": "WS",

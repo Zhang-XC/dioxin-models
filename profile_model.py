@@ -35,6 +35,21 @@ def save_initial_profile(df: pd.DataFrame) -> None:
     save_results(results, "0.csv")
 
 
+def apply_adjustment_factors(s: pd.Series, phase: str, device_config: dict) -> pd.Series:
+    valid_phases = ["gas", "particulate", "total"]
+    if "adjustment" in device_config:
+        diff_phases = set(device_config["adjustment"]["phase"]) - set(valid_phases)
+        if diff_phases:
+            raise ValueError(
+                f"Invalid phases {diff_phases} in adjustment" + \
+                f" for device {device_config['name']}."
+            )
+        factors = load_input_data(device_config["adjustment"]["factors_path"])
+        if phase in device_config["adjustment"]["phase"]:
+            s = s * factors[phase]
+    return s
+
+
 def simulate_removal_with_partitioning(device_config: dict, device_index: int) -> pd.DataFrame:
     init_profile = load_input_data(os.path.join(OUTPUT_PATH, f"{int(device_index - 1)}.csv"))
     ref_profile = load_input_data(os.path.join(DATA_PATH, f"{int(device_index)}.csv"))
@@ -42,7 +57,7 @@ def simulate_removal_with_partitioning(device_config: dict, device_index: int) -
     vp_params = load_input_data(os.path.join("params", "vapor_pressure.csv"))
     vapor_pressure = 10 ** (vp_params["b"] - vp_params["a"] / device_config["temperature"])
     gas_fraction = 0.3491 + 0.0407 * np.log(vapor_pressure) # TODO
-    
+
     profile_before_g = init_profile["total"] * gas_fraction
     profile_before_p = init_profile["total"] * (1 - gas_fraction)
 
@@ -53,6 +68,9 @@ def simulate_removal_with_partitioning(device_config: dict, device_index: int) -
         (ref_profile["gas_before"] * device_config["conc_in"])
     removal_efficiency_p = 1 - ref_profile["particulate_after"] * device_config["conc_out"] / \
         (ref_profile["particulate_before"] * device_config["conc_in"])
+    
+    removal_efficiency_g = apply_adjustment_factors(removal_efficiency_g, "gas", device_config)
+    removal_efficiency_p = apply_adjustment_factors(removal_efficiency_p, "particulate", device_config)
 
     conc_after_g = (1 - removal_efficiency_g) * conc_before_g
     conc_after_p = (1 - removal_efficiency_p) * conc_before_p
@@ -67,12 +85,14 @@ def simulate_removal_with_partitioning(device_config: dict, device_index: int) -
 
 def simulate_removal_without_partitioning(device_config: dict, device_index: int) -> pd.DataFrame:
     init_profile = load_input_data(os.path.join(OUTPUT_PATH, f"{int(device_index - 1)}.csv"))
-    ref_profile = load_input_data(os.path.join(DATA_PATH, f"{int(device_index)}.csv"))
+    ref_removal_efficiency = load_input_data(os.path.join(DATA_PATH, f"{int(device_index)}.csv"))
 
-    removal_efficiency = 1 - ref_profile["total_after"] / ref_profile["total_before"]
-    removal_efficiency_adjusted = (1 - removal_efficiency.sum()) / removal_efficiency.sum() + \
-        removal_efficiency / removal_efficiency.sum()
+    removal_efficiency = ref_removal_efficiency["removal_efficiency"]
+    profile_after = init_profile["total"] * (1 - removal_efficiency)
+    removal_efficiency_adjusted = 1 - (1 - removal_efficiency) / profile_after.sum()
     
+    removal_efficiency_adjusted = apply_adjustment_factors(removal_efficiency_adjusted, "total", device_config)
+
     results = init_results()
     results["total"] = init_profile["total"] * (1 - removal_efficiency_adjusted)
     save_results(results, f"{device_index}.csv")
