@@ -1,5 +1,5 @@
 "# Each column indicates the mass fraction of each congener in gas or particulate phase relative to total PCDD/Fs, before or after treatment.",,,,
-congener,gas_before,particulate_after,gas_after,particulate_after
+congener,gas_before,particulate_before,gas_after,particulate_after
 "2,3,7,8-TCDD",0.001,0.0007,0.0012,0.0001
 "1,2,3,7,8-PeCDD",0.0031,0.0039,0.0079,0.0017
 "1,2,3,4,7,8-HxCDD",0.0028,0.0048,0.009,0.0026

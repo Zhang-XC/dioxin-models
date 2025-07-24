@@ -9,7 +9,8 @@ def load_input_data(path: str) -> pd.DataFrame:
     skip_rows = 0
     with open(path, 'r') as file:
         for line in file:
-            if line.strip().startswith('#'):
+            line = line.strip()
+            if line.startswith('#') or line.startswith("\"#"):
                 skip_rows += 1
             else:
                 break
@@ -25,7 +26,7 @@ def init_results() -> pd.DataFrame:
 
 
 def save_results(df: pd.DataFrame, filename: str) -> None:
-    df.to_csv(os.path.join(DATA_PATH, filename), index_label="congener", index=True)
+    df.to_csv(os.path.join(OUTPUT_PATH, filename), index_label="congener", index=True)
 
 
 def save_initial_profile(df: pd.DataFrame) -> None:
