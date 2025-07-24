@@ -36,7 +36,7 @@
 3. Install dependencies:
 
    ```
-   pip install numpy pandas
+   pip install numpy pandas scipy
    ```
 
 4. Run simulations:
