@@ -21,20 +21,28 @@ def load_input_data(path: str) -> pd.DataFrame:
     return df.reindex(CONGENERS)
 
 
+def get_input_filename(device_index: int) -> str:
+    return os.path.join(DATA_PATH, f"{int(device_index)}_input.csv")
+
+
+def get_output_filename(device_index: int) -> str:
+    return os.path.join(OUTPUT_PATH, f"{int(device_index)}_output.csv")
+
+
 def init_results() -> pd.DataFrame:
     results = pd.DataFrame(index=CONGENERS, columns=["total"])
     results.index.name = "congener"
     return results
 
 
-def save_results(df: pd.DataFrame, filename: str) -> None:
-    df.to_csv(os.path.join(OUTPUT_PATH, filename), index_label="congener", index=True)
+def save_results(df: pd.DataFrame, path: str) -> None:
+    df.to_csv(path, index_label="congener", index=True)
 
 
 def save_initial_profile(df: pd.DataFrame) -> None:
     results = init_results()
     results["total"] = df["gas"] + df["particulate"]
-    save_results(results, "0.csv")
+    save_results(results, get_output_filename(0))
 
 
 def linear_regression(x_fit: pd.Series, y_fit: pd.Series, x_pred: pd.Series) -> pd.Series:
@@ -58,8 +66,8 @@ def apply_adjustment_factors(s: pd.Series, phase: str, device_config: dict) -> p
 
 
 def simulate_removal_with_partitioning(device_config: dict, device_index: int) -> pd.DataFrame:
-    init_profile = load_input_data(os.path.join(OUTPUT_PATH, f"{int(device_index - 1)}.csv"))
-    ref_profile = load_input_data(os.path.join(DATA_PATH, f"{int(device_index)}.csv"))
+    init_profile = load_input_data(get_output_filename(device_index - 1))
+    ref_profile = load_input_data(get_input_filename(device_index))
     
     vp_params = load_input_data(os.path.join("params", "vapor_pressure.csv"))
     vapor_pressure = 10 ** (vp_params["b"] - vp_params["a"] / device_config["temperature"])
@@ -94,12 +102,12 @@ def simulate_removal_with_partitioning(device_config: dict, device_index: int) -
 
     results = init_results()
     results["total"] = profile_after_g + profile_after_p
-    save_results(results, f"{device_index}.csv")
+    save_results(results, get_output_filename(device_index))
 
 
 def simulate_removal_without_partitioning(device_config: dict, device_index: int) -> pd.DataFrame:
-    init_profile = load_input_data(os.path.join(OUTPUT_PATH, f"{int(device_index - 1)}.csv"))
-    ref_removal_efficiency = load_input_data(os.path.join(DATA_PATH, f"{int(device_index)}.csv"))
+    init_profile = load_input_data(get_output_filename(device_index - 1))
+    ref_removal_efficiency = load_input_data(get_input_filename(device_index))
 
     removal_efficiency = ref_removal_efficiency["removal_efficiency"]
     profile_after = init_profile["total"] * (1 - removal_efficiency)
@@ -109,10 +117,10 @@ def simulate_removal_without_partitioning(device_config: dict, device_index: int
 
     results = init_results()
     results["total"] = init_profile["total"] * (1 - removal_efficiency_adjusted)
-    save_results(results, f"{device_index}.csv")
+    save_results(results, get_output_filename(device_index))
 
 
-# %% Initialize simulation settings
+# Initialize simulation settings
 CONGENERS = [
     "2,3,7,8-TCDD",
     "1,2,3,7,8-PeCDD",
@@ -142,12 +150,12 @@ if not os.path.exists(OUTPUT_PATH):
 with open("config.json", "r") as f:
     config = json.load(f)
 
-# %% Load and save initial profile
-init_profile = load_input_data(os.path.join(DATA_PATH, "0.csv"))
+# Load and save initial profile
+init_profile = load_input_data(get_input_filename(0))
 save_initial_profile(init_profile)
 
-# %% Run simulation for each device
-for i, device_config in enumerate(config["devices"]):
+# Run simulation for each device
+for i, device_config in enumerate(config["profile_model"]):
     device_index = i + 1
     if device_config["mode"] == 1:
         results = simulate_removal_with_partitioning(device_config, device_index=device_index)
