@@ -1,5 +1,5 @@
 {
-    "devices": [
+    "profile_model": [
         {
             "name": "ESP",
             "mode": 1,
@@ -16,5 +16,12 @@
             "name": "WS",
             "mode": 2
         }
-    ]
+    ],
+    "quantity_model": {
+        "combustion_temperature": 1223.15,
+        "residence_time": 2,
+        "yearly_operation_hours": 8050,
+        "ocdf_fraction": 0.207,
+        "removal_efficiencies": [-1.61, 0.4]
+    }
 }
