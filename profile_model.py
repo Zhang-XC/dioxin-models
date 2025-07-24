@@ -1,6 +1,6 @@
 import os
-import json
 
+import yaml
 import numpy as np
 import pandas as pd
 
@@ -147,8 +147,8 @@ OUTPUT_PATH = os.path.join("results", "profile_model")
 if not os.path.exists(OUTPUT_PATH):
     os.makedirs(OUTPUT_PATH)
 
-with open("config.json", "r") as f:
-    config = json.load(f)
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
 
 # Load and save initial profile
 init_profile = load_input_data(get_input_filename(0))

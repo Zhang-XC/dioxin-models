@@ -1,6 +1,6 @@
 import os
-import json
 
+import yaml
 import numpy as np
 import pandas as pd
 
@@ -13,8 +13,8 @@ OUTPUT_FILE = os.path.join(OUTPUT_PATH, "output.csv")
 if not os.path.exists(OUTPUT_PATH):
     os.makedirs(OUTPUT_PATH)
 
-with open("config.json", "r") as f:
-    config = json.load(f)
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
 config = config["quantity_model"]
 
 # Kinetic parameters (Palmer et al., 2021)
