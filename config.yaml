@@ -4,6 +4,9 @@ profile_model:
   index_label: "congener"                 # Name of the index column in CSV files
   result_column: "output"                 # Name of the column to write the results
   devices:
+    # Note: You can add more devices to this list. There are two types of
+    # simulations for each device, with `partition` set to True or False.
+    # You are free to choose between them.
     - name: "ESP"              # Name of the air pollution control device (APCD)
       partition: True          # Whether or not to consider phase partitioning        
       temperature: 563.15      # Temperature of the simulated APCD, K
