@@ -19,7 +19,7 @@ Please define the simulation settings in `config.yaml`. Place tabular input file
 
 * **Profile model:** The CSV files should contain the reference congener profiles before and after each APCD. Place the files in `data/profile_model/`. There should be one input file for each APCD defined in `config.yaml`. Please follow the format `{device_index}_input.csv` for naming, where `device_index` is the index of the APCD starting from `1`. Use `0_input.csv` to specify the congener profile before the first device.
 
-If your device configuration requires additional files (e.g., via `adjust` settings), make sure to specify their paths in `config.yaml` and prepare these files accordingly.
+  If your device configuration requires additional files (e.g., via `adjust` settings), make sure to specify their paths in `config.yaml` and prepare these files accordingly.
 
 * **Quantity model:** There should be one CSV file containing yearly input data required by the model. Place the file in `data/quantity_model/` with the name `input.csv`.
 
