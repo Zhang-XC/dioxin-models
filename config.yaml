@@ -1,19 +1,19 @@
-profile_model: 
-  - name: "ESP"
-    mode: 1
-    temperature: 563.15
-    ref_temperature: 507.15
-    conc_in: 58.966
-    conc_out: 134.08
-    adjustment:
-      phase: ["particulate"]
-      factors_path: "./params/esp_adjust_factors.csv"
+profile_model:
+  - name: "ESP"              # Name of the air pollution control device (APCD)
+    partition: True          # Whether or not to consider phase partitioning        
+    temperature: 563.15      # Temperature of the simulated APCD, K
+    ref_temperature: 507.15  # Temperature of the reference APCD, K
+    conc_in: 58.966          # Inlet concentration of total PCDD/Fs
+    conc_out: 134.08         # Outlet concentration of total PCDD/Fs
+    adjust:                  # If included, apply adjustment factors to removal efficiencies
+      phase: ["particulate"] # One or more of ["gas", "particulate", "total"]
+      factors_path: "./data/profile_model/1_factors.csv" # Path to the adjustment factors
   - name: "WS"
-    mode: 2
+    partition: False
 
 quantity_model:
-  combustion_temperature: 1223.15
-  residence_time: 2
-  yearly_operation_hours: 8050
-  ocdf_fraction: 0.207
-  removal_efficiencies: [-1.61, 0.4]
+  combustion_temperature: 1223.15    # Furnace combustion temperature, K
+  residence_time: 2                  # Flue gas residence time in the furnace, s
+  yearly_operation_hours: 8050       # Yearly operation hours of the furnace, hours
+  ocdf_fraction: 0.207               # Fraction of OCDF in total PCDD/Fs before APCDs
+  removal_efficiencies: [-1.61, 0.4] # Removal efficiencies of APCDs, [] if no APCDs

@@ -1,24 +1,11 @@
 import os
 
-import yaml
 import numpy as np
 import pandas as pd
 
 from scipy.stats import linregress
-
-
-def load_input_data(path: str) -> pd.DataFrame:
-    skip_rows = 0
-    with open(path, 'r') as file:
-        for line in file:
-            line = line.strip()
-            if line.startswith('#') or line.startswith("\"#"):
-                skip_rows += 1
-            else:
-                break
-
-    df = pd.read_csv(path, skiprows=skip_rows, index_col="congener")
-    return df.reindex(CONGENERS)
+from utils.io import CsvReader, CsvWriter
+from utils.config import load_config, has_required_keys
 
 
 def get_input_filename(device_index: int) -> str:
@@ -29,20 +16,10 @@ def get_output_filename(device_index: int) -> str:
     return os.path.join(OUTPUT_PATH, f"{int(device_index)}_output.csv")
 
 
-def init_results() -> pd.DataFrame:
-    results = pd.DataFrame(index=CONGENERS, columns=["total"])
-    results.index.name = "congener"
-    return results
-
-
-def save_results(df: pd.DataFrame, path: str) -> None:
-    df.to_csv(path, index_label="congener", index=True)
-
-
-def save_initial_profile(df: pd.DataFrame) -> None:
-    results = init_results()
-    results["total"] = df["gas"] + df["particulate"]
-    save_results(results, get_output_filename(0))
+def save_initial_profile(df: pd.DataFrame, writer: CsvWriter) -> None:
+    results = writer.init_df()
+    results[RESULT_COLUMN] = df["gas"] + df["particulate"]
+    writer.write_df(df=results, path=get_output_filename(0))
 
 
 def linear_regression(x_fit: pd.Series, y_fit: pd.Series, x_pred: pd.Series) -> pd.Series:
@@ -50,26 +27,30 @@ def linear_regression(x_fit: pd.Series, y_fit: pd.Series, x_pred: pd.Series) -> 
     return slope * x_pred + intercept
 
 
-def apply_adjustment_factors(s: pd.Series, phase: str, device_config: dict) -> pd.Series:
+def apply_adjustment_factors(s: pd.Series, phase: str, device_config: dict, reader: CsvReader) -> pd.Series:
     valid_phases = ["gas", "particulate", "total"]
-    if "adjustment" in device_config:
-        diff_phases = set(device_config["adjustment"]["phase"]) - set(valid_phases)
+    required_keys = ["phase", "factors_path"]
+    if "adjust" in device_config:
+        has_required_keys(device_config["adjust"], required_keys)
+        diff_phases = set(device_config["adjust"]["phase"]) - set(valid_phases)
         if diff_phases:
-            raise ValueError(
-                f"Invalid phases {diff_phases} in adjustment" + \
-                f" for device {device_config['name']}."
-            )
-        factors = load_input_data(device_config["adjustment"]["factors_path"])
-        if phase in device_config["adjustment"]["phase"]:
+            raise ValueError(f"Invalid phases {diff_phases} in adjustment")
+        factors = reader.read_df(device_config["adjust"]["factors_path"])
+        if phase in device_config["adjust"]["phase"]:
             s = s * factors[phase]
     return s
 
 
-def simulate_removal_with_partitioning(device_config: dict, device_index: int) -> pd.DataFrame:
-    init_profile = load_input_data(get_output_filename(device_index - 1))
-    ref_profile = load_input_data(get_input_filename(device_index))
+def simulate_removal_with_partitioning(
+        device_config: dict,
+        device_index: int,
+        reader: CsvReader,
+        writer: CsvWriter
+    ) -> pd.DataFrame:
+    init_profile = reader.read_df(get_output_filename(device_index - 1))
+    ref_profile = reader.read_df(get_input_filename(device_index))
     
-    vp_params = load_input_data(os.path.join("params", "vapor_pressure.csv"))
+    vp_params = reader.read_df(os.path.join("params", "vapor_pressure.csv"))
     vapor_pressure = 10 ** (vp_params["b"] - vp_params["a"] / device_config["temperature"])
     ref_vapor_pressure = 10 ** (vp_params["b"] - vp_params["a"] / device_config["ref_temperature"])
     ref_gas_fraction = ref_profile["gas_before"] / (ref_profile["gas_before"] + ref_profile["particulate_before"])
@@ -80,8 +61,8 @@ def simulate_removal_with_partitioning(device_config: dict, device_index: int) -
         x_pred=np.log(vapor_pressure)
     )
 
-    profile_before_g = init_profile["total"] * gas_fraction
-    profile_before_p = init_profile["total"] * (1 - gas_fraction)
+    profile_before_g = init_profile[RESULT_COLUMN] * gas_fraction
+    profile_before_p = init_profile[RESULT_COLUMN] * (1 - gas_fraction)
 
     conc_before_g = profile_before_g * device_config["conc_in"]
     conc_before_p = profile_before_p * device_config["conc_in"]
@@ -91,8 +72,8 @@ def simulate_removal_with_partitioning(device_config: dict, device_index: int) -
     removal_efficiency_p = 1 - ref_profile["particulate_after"] * device_config["conc_out"] / \
         (ref_profile["particulate_before"] * device_config["conc_in"])
     
-    removal_efficiency_g = apply_adjustment_factors(removal_efficiency_g, "gas", device_config)
-    removal_efficiency_p = apply_adjustment_factors(removal_efficiency_p, "particulate", device_config)
+    removal_efficiency_g = apply_adjustment_factors(removal_efficiency_g, "gas", device_config, reader)
+    removal_efficiency_p = apply_adjustment_factors(removal_efficiency_p, "particulate", device_config, reader)
 
     conc_after_g = (1 - removal_efficiency_g) * conc_before_g
     conc_after_p = (1 - removal_efficiency_p) * conc_before_p
@@ -100,24 +81,29 @@ def simulate_removal_with_partitioning(device_config: dict, device_index: int) -
     profile_after_g = conc_after_g / (conc_after_g + conc_after_p).sum()
     profile_after_p = conc_after_p / (conc_after_g + conc_after_p).sum()
 
-    results = init_results()
-    results["total"] = profile_after_g + profile_after_p
-    save_results(results, get_output_filename(device_index))
+    results = writer.init_df()
+    results[RESULT_COLUMN] = profile_after_g + profile_after_p
+    writer.write_df(df=results, path=get_output_filename(device_index))
 
 
-def simulate_removal_without_partitioning(device_config: dict, device_index: int) -> pd.DataFrame:
-    init_profile = load_input_data(get_output_filename(device_index - 1))
-    ref_removal_efficiency = load_input_data(get_input_filename(device_index))
+def simulate_removal_without_partitioning(
+        device_config: dict,
+        device_index: int,
+        reader: CsvReader,
+        writer: CsvWriter
+    ) -> pd.DataFrame:
+    init_profile = reader.read_df(get_output_filename(device_index - 1))
+    ref_removal_efficiency = reader.read_df(get_input_filename(device_index))
 
     removal_efficiency = ref_removal_efficiency["removal_efficiency"]
-    profile_after = init_profile["total"] * (1 - removal_efficiency)
+    profile_after = init_profile[RESULT_COLUMN] * (1 - removal_efficiency)
     removal_efficiency_adjusted = 1 - (1 - removal_efficiency) / profile_after.sum()
     
-    removal_efficiency_adjusted = apply_adjustment_factors(removal_efficiency_adjusted, "total", device_config)
+    removal_efficiency_adjusted = apply_adjustment_factors(removal_efficiency_adjusted, "total", device_config, reader)
 
-    results = init_results()
-    results["total"] = init_profile["total"] * (1 - removal_efficiency_adjusted)
-    save_results(results, get_output_filename(device_index))
+    results = writer.init_df()
+    results[RESULT_COLUMN] = init_profile[RESULT_COLUMN] * (1 - removal_efficiency_adjusted)
+    writer.write_df(df=results, path=get_output_filename(device_index))
 
 
 # Initialize simulation settings
@@ -147,19 +133,30 @@ OUTPUT_PATH = os.path.join("results", "profile_model")
 if not os.path.exists(OUTPUT_PATH):
     os.makedirs(OUTPUT_PATH)
 
-with open("config.yaml", "r") as f:
-    config = yaml.safe_load(f)
+INDEX_LABEL = "congener"
+RESULT_COLUMN = "output"
+COMMENTS = [
+    "Output: Fraction of each congener in total PCDD/Fs after the device."
+]
+
+reader = CsvReader(index_label=INDEX_LABEL)
+writer = CsvWriter(
+    index=CONGENERS,
+    columns=[RESULT_COLUMN],
+    index_label=INDEX_LABEL,
+    comments=COMMENTS
+)
+
+config = load_config("profile_model")
 
 # Load and save initial profile
-init_profile = load_input_data(get_input_filename(0))
-save_initial_profile(init_profile)
+init_profile = reader.read_df(get_input_filename(0))
+save_initial_profile(init_profile, writer)
 
 # Run simulation for each device
-for i, device_config in enumerate(config["profile_model"]):
+for i, device_config in enumerate(config):
     device_index = i + 1
-    if device_config["mode"] == 1:
-        results = simulate_removal_with_partitioning(device_config, device_index=device_index)
-    elif device_config["mode"] == 2:
-        results = simulate_removal_without_partitioning(device_config, device_index=device_index)
+    if device_config["partition"]:
+        results = simulate_removal_with_partitioning(device_config, device_index, reader, writer)
     else:
-        raise ValueError(f"Invalid mode {device_config['mode']} for device {device_index}.")
+        results = simulate_removal_without_partitioning(device_config, device_index, reader, writer)
