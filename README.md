@@ -61,7 +61,10 @@ Both the YAML configuration file and the CSV input files must follow the format 
 4. Run simulations:
 
    ```
+   # Emission profile model
    python profile_model.py
+
+   # Emission quantity model
    python quantity_model.py
    ```
 
